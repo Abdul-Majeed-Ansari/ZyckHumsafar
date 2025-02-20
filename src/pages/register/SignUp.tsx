@@ -1,26 +1,32 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import { useSignUp } from "@clerk/clerk-react";
+import { useNavigate } from "react-router-dom";
 
 const Signup: React.FC = () => {
+  const { isLoaded, signUp, setActive } = useSignUp();
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    profileFor: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    gender: '',
-    dateOfBirth: '',
-    maritalStatus: '',
-    country: '',
-    state: '',
-    city: '',
-    phone: '',
-    hearAboutUs: '',
+    firstName: "",
+    lastName: "",
+    profileFor: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    gender: "",
+    dateOfBirth: "",
+    maritalStatus: "",
+    country: "",
+    state: "",
+    city: "",
+    phone: "",
+    hearAboutUs: "",
     termsAccepted: false,
   });
 
-  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [code, setCode] = useState("");
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -28,74 +34,84 @@ const Signup: React.FC = () => {
     const { name, value, type, checked } = e.target;
     setFormData({
       ...formData,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: type === "checkbox" ? checked : value,
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.termsAccepted) {
-      alert('Please accept the terms and conditions to proceed.');
+    if (!isLoaded) return;
+
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
-    console.log('Form Data Submitted:', formData);
-    // Redirect to a thank-you or dashboard page after signup
-    navigate('/dashboard'); // Replace with your desired route
+
+    try {
+      await signUp.create({
+        emailAddress: formData.email,
+        password: formData.password,
+      });
+
+      await signUp.prepareEmailAddressVerification();
+      setPendingVerification(true);
+    } catch (err: any) {
+      setError(err.errors?.[0]?.message || "Signup failed.");
+    }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isLoaded) return;
+
+    try {
+      const completeSignUp = await signUp.attemptEmailAddressVerification({ code });
+
+      if (completeSignUp.status === "complete") {
+        await setActive({ session: completeSignUp.createdSessionId });
+        navigate("/");
+      }
+    } catch (err: any) {
+      setError(err.errors?.[0]?.message || "Verification failed.");
+    }
   };
 
   return (
-    <div className="min-h-screen bg-pink-50 flex flex-col items-center py-10">
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-8">
-        <h1 className="text-3xl font-bold text-pink-600 text-center mb-6">Create an Account</h1>
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          {/* First Name and Last Name */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
-                First Name
-              </label>
-              <input
-                type="text"
-                id="firstName"
-                name="firstName"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-4 focus:ring-pink-300 focus:border-pink-500 p-3"
-                placeholder="First Name"
-                value={formData.firstName}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
-                Last Name
-              </label>
-              <input
-                type="text"
-                id="lastName"
-                name="lastName"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-4 focus:ring-pink-300 focus:border-pink-500 p-3"
-                placeholder="Last Name"
-                value={formData.lastName}
-                onChange={handleChange}
-                required
-              />
-            </div>
-          </div>
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center py-10">
+      <div className="w-full max-w-2xl bg-white rounded-lg shadow-md p-8">
+        <h1 className="text-3xl font-bold text-center text-pink-600 mb-6">Create an Account</h1>
+        {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
-          {/* Profile For */}
-          <div>
-            <label htmlFor="profileFor" className="block text-sm font-medium text-gray-700">
-              Profile For
-            </label>
+        {!pendingVerification ? (
+          <form onSubmit={handleSignup} className="space-y-4">
+            {/* Name Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input
+                type="text"
+                name="firstName"
+                placeholder="First Name"
+                className="w-full border p-3 rounded"
+                onChange={handleChange}
+                required
+              />
+              <input
+                type="text"
+                name="lastName"
+                placeholder="Last Name"
+                className="w-full border p-3 rounded"
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            {/* Profile For */}
             <select
-              id="profileFor"
               name="profileFor"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-4 focus:ring-pink-300 focus:border-pink-500 p-3"
-              value={formData.profileFor}
+              className="w-full border p-3 rounded"
               onChange={handleChange}
               required
             >
-              <option value="">Select</option>
+              <option value="">Profile For</option>
               <option value="self">Self</option>
               <option value="son">Son</option>
               <option value="daughter">Daughter</option>
@@ -103,125 +119,146 @@ const Signup: React.FC = () => {
               <option value="sister">Sister</option>
               <option value="relative">Relative</option>
             </select>
-          </div>
 
-          {/* Email */}
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email
-            </label>
+            {/* Email */}
             <input
               type="email"
-              id="email"
               name="email"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-4 focus:ring-pink-300 focus:border-pink-500 p-3"
               placeholder="Email"
-              value={formData.email}
+              className="w-full border p-3 rounded"
               onChange={handleChange}
               required
             />
-          </div>
 
-          {/* Password and Confirm Password */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
+            {/* Password Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <input
                 type="password"
-                id="password"
                 name="password"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-4 focus:ring-pink-300 focus:border-pink-500 p-3"
                 placeholder="Password"
-                value={formData.password}
+                className="w-full border p-3 rounded"
                 onChange={handleChange}
                 required
               />
-            </div>
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
-              </label>
               <input
                 type="password"
-                id="confirmPassword"
                 name="confirmPassword"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-4 focus:ring-pink-300 focus:border-pink-500 p-3"
                 placeholder="Confirm Password"
-                value={formData.confirmPassword}
+                className="w-full border p-3 rounded"
                 onChange={handleChange}
                 required
               />
             </div>
-          </div>
 
-          {/* Gender */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Gender</label>
-            <div className="mt-2 flex items-center space-x-4">
-              <label className="inline-flex items-center">
+            {/* Gender */}
+            <div className="flex space-x-4">
+              <label className="flex items-center">
                 <input
                   type="radio"
                   name="gender"
                   value="male"
-                  className="form-radio h-5 w-5 text-pink-600"
+                  className="mr-2"
                   onChange={handleChange}
                   required
                 />
-                <span className="ml-2 text-gray-700">Male</span>
+                Male
               </label>
-              <label className="inline-flex items-center">
+              <label className="flex items-center">
                 <input
                   type="radio"
                   name="gender"
                   value="female"
-                  className="form-radio h-5 w-5 text-pink-600"
+                  className="mr-2"
                   onChange={handleChange}
                   required
                 />
-                <span className="ml-2 text-gray-700">Female</span>
+                Female
               </label>
             </div>
-          </div>
 
-          {/* Other Fields */}
-          {/* Add remaining fields here as per the last implementation */}
+            {/* Location Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <input
+                type="text"
+                name="country"
+                placeholder="Country"
+                className="w-full border p-3 rounded"
+                onChange={handleChange}
+                required
+              />
+              <input
+                type="text"
+                name="state"
+                placeholder="State"
+                className="w-full border p-3 rounded"
+                onChange={handleChange}
+                required
+              />
+              <input
+                type="text"
+                name="city"
+                placeholder="City"
+                className="w-full border p-3 rounded"
+                onChange={handleChange}
+                required
+              />
+            </div>
 
-          {/* Terms & Conditions */}
-          <div className="flex items-center">
+            {/* Phone & Hear About Us */}
             <input
-              type="checkbox"
-              id="termsAccepted"
-              name="termsAccepted"
-              className="form-checkbox h-5 w-5 text-pink-600"
-              checked={formData.termsAccepted}
+              type="text"
+              name="phone"
+              placeholder="Phone Number"
+              className="w-full border p-3 rounded"
               onChange={handleChange}
               required
             />
-            <label htmlFor="termsAccepted" className="ml-2 text-gray-700 text-sm">
-              I agree to the <a href="#" className="text-pink-600 hover:underline">terms and conditions</a>.
-            </label>
-          </div>
+            <input
+              type="text"
+              name="hearAboutUs"
+              placeholder="How did you hear about us?"
+              className="w-full border p-3 rounded"
+              onChange={handleChange}
+            />
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            className="w-full bg-pink-600 text-white py-2 px-4 rounded-lg shadow-lg hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-pink-500"
-          >
-            Sign Up
-          </button>
+            {/* Terms & Conditions */}
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                name="termsAccepted"
+                className="mr-2"
+                onChange={handleChange}
+                required
+              />
+              <span className="text-sm">
+                I agree to the <a href="#" className="text-pink-600">terms and conditions</a>.
+              </span>
+            </div>
 
-          {/* Already Have an Account */}
-          <div className="text-center mt-4">
-            <Link
-              to="/login"
-              className="text-pink-600 hover:underline text-sm font-medium"
-            >
-              Already have an account? Login
-            </Link>
-          </div>
-        </form>
+            {/* Submit Button */}
+            <button type="submit" className="w-full bg-pink-600 text-white p-3 rounded hover:bg-pink-700">
+              Sign Up
+            </button>
+
+            {/* Already Have an Account */}
+            <p className="text-center text-sm mt-4">
+              Already have an account? <a href="/login" className="text-pink-600">Log in</a>
+            </p>
+          </form>
+        ) : (
+          <form onSubmit={handleVerify} className="space-y-4">
+            <input
+              type="text"
+              placeholder="Verification Code"
+              className="w-full border p-3 rounded"
+              onChange={(e) => setCode(e.target.value)}
+              required
+            />
+            <button type="submit" className="w-full bg-green-600 text-white p-3 rounded">
+              Verify Email
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
